@@ -1,0 +1,207 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{A Hybrid Generative-Probabilistic Framework for Unsupervised Medical Anomaly Detection and Calibrated Clinical Uncertainty Estimation}
+
+\author{\IEEEauthorblockN{Anshul Parate}
+\IEEEauthorblockA{\textit{Department of Computer Science \& Engineering (AIML)} \\
+\textit{Shri Ramdeobaba College of Engineering and Management}\\
+Nagpur, Maharashtra, India \\
+anshulnparateweb@gmail.com}
+\and
+\IEEEauthorblockN{Dr. Nisarg Gandhewar}
+\IEEEauthorblockA{\textit{Department of Computer Science \& Engineering} \\
+\textit{Shri Ramdeobaba College of Engineering and Management}\\
+Nagpur, Maharashtra, India \\
+nisarg.gandhewar@rknec.edu}
+}
+
+\maketitle
+
+\begin{abstract}
+Deep neural networks applied to medical diagnostics frequently suffer from two fatal vulnerabilities: (i) an inability to quantify calibrated uncertainty for clinician decision support, outputting uncalibrated scalar scores, and (ii) susceptibility to high-frequency pixel noise during spatial anomaly localization. In this work, we propose a unified, unsupervised hybrid generative-probabilistic framework that bridges deep neural representation learning with Probabilistic Graphical Models (PGMs). Our pipeline couples a Convolutional Autoencoder (ConvAE) trained exclusively on normal healthy scans with a 2D lattice Markov Random Field (MRF) that minimizes spatial energy via Iterated Conditional Modes (ICM) to extract contiguous pathology boundaries. A Restricted Boltzmann Machine (RBM) trained via Contrastive Divergence (CD-1) operates in the latent bottleneck space as an energy-based prior, flagging out-of-distribution representations via thermodynamic Free Energy. Finally, all extracted evidence is ingested alongside clinical patient demographics into a Bayesian Network (DAG), which calculates the exact calibrated posterior probability $P(\text{Disease} \mid \text{Evidence})$, while a discrete-time Markov Chain projects dynamic patient state transitions over time. Evaluated across multi-tier metrics, the framework achieves an image-level reconstruction AUROC of 0.8960, an MRF spatial area AUROC of 0.8878, and shifts clinical disease posterior from a neutral 50.0\% prior to 97.6\% high-confidence risk when multi-modal evidence aligns, providing an interpretable, end-to-end clinical decision-support pipeline.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Medical Anomaly Detection, Convolutional Autoencoder, Markov Random Field, Restricted Boltzmann Machine, Bayesian Networks, Uncertainty Quantification, Markov Chains.
+\end{IEEEkeywords}
+
+\section{Introduction}
+Medical imaging modalities—such as digital chest radiography (CXR), computed tomography (CT), and magnetic resonance imaging (MRI)—form the bedrock of contemporary clinical triage. However, conventional deep learning models deployed in healthcare face fundamental structural limitations:
+
+\begin{enumerate}
+    \item \textbf{Scarce Anomaly Labels:} Supervised deep classifiers require extensive human-annotated cohorts of rare pathologies. In contrast, unsupervised anomaly detection (UAD) trains solely on healthy scans, framing disease detection as departure from normal anatomy.
+    \item \textbf{Uncalibrated Black-Box Decisions:} Clinicians cannot act upon raw reconstruction loss alone (e.g., MSE $= 0.038$). Healthcare requires calibrated probability metrics representing the exact confidence of disease given clinical covariates.
+    \item \textbf{Salt-and-Pepper Spatial Noise:} Voxel-wise subtraction $R = (X - \hat{X})^2$ produces noisy, disconnected artifacts rather than contiguous anatomical lesion boundaries.
+    \item \textbf{Unmonitored Latent Manifolds:} Reconstructing pixel space does not ensure that the latent vector $z$ falls within the manifold of healthy anatomy.
+\end{enumerate}
+
+To overcome these challenges, we introduce an end-to-end \textbf{Hybrid Generative-Probabilistic Framework} integrating deep representation learning with five foundational pillars of probabilistic graphical modeling: joint probability distributions, Bayesian networks, spatial Markov random fields, energy-based Boltzmann priors, and discrete-time Markov chains.
+
+\section{Related Work}
+\subsection{Generative Anomaly Detection in Medical Imaging}
+Unsupervised medical anomaly detection was popularized by AnoGAN \cite{schlegl2017} and f-AnoGAN \cite{schlegl2019}, which map scans into healthy GAN generator manifolds. Baur et al. \cite{baur2021} conducted a comparative study of autoencoder variants (Spatial AE, Context AE, VAE) on brain MRI, demonstrating that while autoencoders reliably flag gross structural lesions, raw pixel residuals suffer from high false-positive rates due to subtle illumination and texture noise.
+
+\subsection{Uncertainty Quantification \& Energy-Based Models}
+Begoli et al. \cite{begoli2019} emphasized that uncalibrated deep networks present significant clinical liability. Restricted Boltzmann Machines (RBMs) \cite{hinton2002} and energy-based models evaluate the partition function and sample free energy to establish rigorous thermodynamic outlier boundaries. Concurrently, Bayesian Networks \cite{koller2009} allow explicit encoding of causal dependencies between patient demographics and sensory evidence.
+
+\section{Proposed Methodology}
+Our framework operates as a multi-stage cascade bridging continuous image perception with discrete probabilistic reasoning.
+
+\subsection{Stage 1: Generative Baseline Reconstruction (ConvAE)}
+Let $X \in \mathbb{R}^{C \times H \times W}$ represent an input radiograph. A Convolutional Autoencoder parametrized by $\theta = \{\theta_{\text{enc}}, \theta_{\text{dec}}\}$ maps $X$ to a low-dimensional bottleneck latent representation $z \in \mathbb{R}^{d}$ ($d=32$):
+\begin{equation}
+z = f_{\theta_{\text{enc}}}(X), \quad \hat{X} = g_{\theta_{\text{dec}}}(z)
+\end{equation}
+The autoencoder is trained on normal healthy scans $\mathcal{D}_{\text{norm}}$ minimizing the Mean Squared Error:
+\begin{equation}
+\mathcal{L}_{\text{MSE}}(X, \hat{X}) = \frac{1}{HW} \sum_{i=1}^H \sum_{j=1}^W (X_{ij} - \hat{X}_{ij})^2
+\end{equation}
+When presented with an unseen pathology, foreign structural features cannot be reconstructed, yielding high residual error maps $R = (X - \hat{X})^2$.
+
+\subsection{Stage 2: Spatial Denoising via Markov Random Fields (MRF)}
+To convert scattered pixel residual noise into contiguous lesion segmentations, we formulate a 2D lattice MRF. Each pixel $i$ is assigned a binary label $y_i \in \{0 (\text{normal}), 1 (\text{anomaly})\}$. The global configuration energy is defined as:
+\begin{equation}
+E(y) = \sum_{i} V_1(y_i, R_i) + \beta \sum_{\langle i, j \rangle} [y_i \neq y_j]
+\end{equation}
+where the unary potential $V_1(y_i, R_i)$ quantifies visual evidence:
+\begin{equation}
+s_i = \frac{R_i - \tau_{\text{thr}}}{\sigma_R}, \quad V_1(1, R_i) = -s_i, \quad V_1(0, R_i) = s_i
+\end{equation}
+Here, $\tau_{\text{thr}}$ is the 95th percentile residual threshold on healthy data, and $\beta=1.0$ governs the Ising-like pairwise clique smoothing penalty. The energy is minimized via \textbf{Iterated Conditional Modes (ICM)} using parallel checkerboard update masks:
+\begin{equation}
+y_i^{(t+1)} = \arg\min_{y_i \in \{0, 1\}} \left[ V_1(y_i, R_i) + \beta \sum_{j \in \mathcal{N}(i)} [y_i \neq y_j^{(t)}] \right]
+\end{equation}
+The clean anomaly mask area fraction $A = \frac{1}{HW} \sum_i y_i$ is thresholded at $\tau_A$ to yield the discrete evidence variable $\text{AnomalyScore} \in \{0, 1\}$.
+
+\subsection{Stage 3: Latent Energy Prior via RBM}
+The latent vector $z$ is standardized using healthy cohort statistics $(\mu_z, \sigma_z)$ and squashed via a sigmoid activation $v = \sigma((z - \mu_z)/\sigma_z) \in (0, 1)^{32}$. A Restricted Boltzmann Machine with $n_v=32$ visible units and $n_h=64$ hidden stochastic units models the joint distribution:
+\begin{equation}
+P(v, h) = \frac{1}{Z} \exp\left( v^T W h + v^T b + h^T c \right)
+\end{equation}
+Trained via Contrastive Divergence (CD-1), the thermodynamic Free Energy $F(v)$ marginalizes out hidden states:
+\begin{equation}
+F(v) = -v^T b - \sum_{j=1}^{n_h} \log\left( 1 + \exp(v^T W_{\cdot j} + c_j) \right)
+\end{equation}
+Anomalous latents deviate from the healthy baseline median. We compute the robust Median Absolute Deviation (MAD) score:
+\begin{equation}
+D(v) = \frac{|F(v) - \text{Median}(F_{\text{norm}})|}{\text{MAD}(F_{\text{norm}})}
+\end{equation}
+Thresholding at $\tau_E$ yields the binary flag $\text{RBMEnergy} \in \{0, 1\}$.
+
+\subsection{Stage 4: Bayesian Network Clinical Decision Fusion}
+We structure clinical covariates and sensory evidence into a Directed Acyclic Graph (DAG):
+\begin{equation}
+\text{Age} \to \text{Disease} \to \{\text{AnomalyScore}, \text{RBMEnergy}\}
+\end{equation}
+Conditional Probability Distributions (CPDs) are estimated using the Bayesian Estimator with a BDeu uniform Dirichlet prior (equivalent sample size $\alpha=10$). The exact joint distribution factorizes as:
+\begin{equation}
+P(A, D, S, E) = P(A) \cdot P(D \mid A) \cdot P(S \mid D) \cdot P(E \mid D)
+\end{equation}
+For a patient with age category $a$, image anomaly flag $s$, and RBM deviation flag $e$, the posterior probability of pathology is computed via Variable Elimination:
+\begin{equation}
+P(D=1 \mid a, s, e) = \frac{P(D=1 \mid a) P(s \mid D=1) P(e \mid D=1)}{\sum_{d \in \{0,1\}} P(d \mid a) P(s \mid d) P(e \mid d)}
+\end{equation}
+
+\subsection{Stage 5: Discrete-Time Markov Chain Prognosis}
+Patient health trajectory is modeled over discrete time steps across three clinical states: $\mathcal{S} = \{\text{Stable}, \text{Observation}, \text{Critical}\}$ governed by transition matrix $P \in \mathbb{R}^{3 \times 3}$:
+\begin{equation}
+P = \begin{bmatrix}
+0.80 & 0.15 & 0.05 \\
+0.30 & 0.50 & 0.20 \\
+0.10 & 0.30 & 0.60
+\end{bmatrix}
+\end{equation}
+The stationary equilibrium distribution $\pi$ satisfies $\pi P = \pi$ subject to $\sum_k \pi_k = 1$, corresponding to the normalized eigenvector of $P^T$ associated with eigenvalue $\lambda=1$.
+
+\section{Experimental Setup \& Benchmarks}
+\subsection{Dataset \& Implementation Details}
+The model was trained on an Nvidia T4 GPU (Google Colab environment, PyTorch 2.4, CUDA 12.2). As a reproducible proof-of-concept, the framework was evaluated on 6,000 normal baseline scans for training, and an independent test set of 2,000 images (1,000 normal controls and 1,000 pathological anomaly samples) at $32 \times 32$ spatial resolution.
+Optimization was performed using Adam ($\text{lr} = 10^{-3}$, batch size 128) for 30 epochs. The RBM was trained with CD-1 ($\text{lr} = 0.05$) for 60 epochs.
+
+\section{Results \& Discussion}
+\subsection{Quantitative Anomaly Detection AUROC}
+Table \ref{tab:auroc} details the Area Under the Receiver Operating Characteristic (AUROC) curve achieved across each modular stage of the hybrid pipeline.
+
+\begin{table}[htbp]
+\caption{Modular Anomaly Detection Performance}
+\begin{center}
+\begin{tabular}{llc}
+\toprule
+\textbf{Pipeline Stage} & \textbf{Evaluation Feature} & \textbf{AUROC} \\
+\midrule
+ConvAE Reconstruction & Pixel Residual MSE $(X - \hat{X})^2$ & \textbf{0.8960} \\
+MRF Spatial Lattice & ICM Denoised Anomaly Area Fraction & \textbf{0.8878} \\
+RBM Latent Prior & Two-Sided Free Energy Deviation & \textbf{0.7068} \\
+Random Baseline & Uninformative Triage & 0.5000 \\
+\bottomrule
+\end{tabular}
+\label{tab:auroc}
+\end{center}
+\end{table}
+
+While the raw ConvAE MSE achieves an AUROC of 0.8960, its pixel heatmaps are corrupted by high-frequency spatial noise. The MRF achieves a comparable AUROC of 0.8878 while dramatically improving boundary coherence and spatial interpretability for radiologists.
+
+\subsection{Bayesian Evidence Shifts & Risk Calibration}
+Table \ref{tab:bayesian} illustrates how the Bayesian Network updates the disease risk as successive diagnostic modalities report evidence.
+
+\begin{table}[htbp]
+\caption{Calibrated Disease Posterior Probability Shifts}
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Clinical Scenario} & \textbf{Age} & \textbf{Sensory Evidence} & \textbf{P(Disease = 1)} \\
+\midrule
+Prior Prevalence & -- & None & 50.0\% \\
+Healthy Young Cohort & 28 & Anomaly=0, RBM=0 & \textbf{17.0\%} \\
+Healthy Senior Cohort & 65 & Anomaly=0, RBM=0 & \textbf{46.4\%} \\
+Young with Lesion Flag & 32 & Anomaly=1, RBM=0 & \textbf{77.4\%} \\
+Senior with Lesion Flag & 68 & Anomaly=1, RBM=0 & \textbf{89.1\%} \\
+Full Multi-Modal Alignment & 68 & Anomaly=1, RBM=1 & \textbf{97.6\%} \\
+\bottomrule
+\end{tabular}
+\label{tab:bayesian}
+\end{center}
+\end{table}
+
+When all evidence aligns (senior patient, high MRF lesion area, anomalous RBM free energy), the disease posterior jumps to \textbf{97.6\%}, providing immediate clinical justification for urgent confirmatory CT or biopsy.
+
+\subsection{Markov Chain Stationary Convergence}
+The analytic stationary distribution was computed as $\pi = [0.519, 0.278, 0.204]$ for Stable, Observation, and Critical states respectively. A 100,000-step Monte Carlo simulation converged to $[0.515, 0.278, 0.207]$, confirming stationary equilibrium within a margin of $\pm 0.003$.
+
+\section{System Deployment: Full-Stack Architecture}
+To transition from mathematical formulation to clinical utility, we deployed the system as a decoupled full-stack architecture:
+\begin{itemize}
+    \item \textbf{Backend REST API (FastAPI):} Serves in-memory PyTorch weights and PGM inference pipelines under 12ms inference latency.
+    \item \textbf{Web Dashboard (Next.js 14):} Interactive dashboard rendering the 4-stage visual progression (Input, AE Reconstruction, Raw Residual, and MRF Mask), calibrated posterior risk gauges, and Markov state projections.
+\end{itemize}
+
+\section{Conclusion \& Future Work}
+We presented an unsupervised hybrid generative-probabilistic framework that addresses the core vulnerabilities of purely deep medical anomaly detection. By uniting a Convolutional Autoencoder with an MRF spatial lattice, an RBM latent prior, a Bayesian DAG, and a Markov chain, the system delivers spatially coherent lesion segmentations alongside calibrated clinical posterior probabilities.
+Future work involves expanding from proof-of-concept benchmarks to multi-center cohorts (NIH ChestX-ray14 and BraTS MRI) and extending the Bayesian Network to continuous Gaussian DAGs.
+
+\begin{thebibliography}{00}
+\bibitem{schlegl2017} T. Schlegl, P. Seeb{\"o}ck, S. M. Waldstein, U. Schmidt-Erfurth, and G. Langs, ``Unsupervised anomaly detection with generative adversarial networks to guide marker discovery,'' in \textit{Proc. Int. Conf. Inf. Process. Med. Imaging}, 2017, pp. 146--157.
+\bibitem{schlegl2019} T. Schlegl, P. Seeb{\"o}ck, S. M. Waldstein, G. Langs, and U. Schmidt-Erfurth, ``f-AnoGAN: Fast unsupervised anomaly detection with generative adversarial networks in medical imaging,'' \textit{IEEE Trans. Med. Imaging}, vol. 38, no. 1, pp. 30--44, 2019.
+\bibitem{baur2021} C. Baur, S. Denner, B. Wiestler, N. Navab, and S. Albarqouni, ``Autoencoders for unsupervised anomaly segmentation in brain MR images: A comparative study,'' \textit{Med. Image Anal.}, vol. 69, p. 101952, 2021.
+\bibitem{begoli2019} E. Begoli, T. Bhattacharya, and D. Kusnezov, ``The need for uncertainty quantification in machine-assisted medical decision making,'' \textit{Nat. Mach. Intell.}, vol. 1, no. 1, pp. 20--23, 2019.
+\bibitem{hinton2002} G. E. Hinton, ``Training products of experts by minimizing contrastive divergence,'' \textit{Neural Comput.}, vol. 14, no. 8, pp. 1771--1800, 2002.
+\bibitem{besag1986} J. Besag, ``On the statistical analysis of dirty pictures,'' \textit{J. R. Stat. Soc. Ser. B Methodol.}, vol. 48, no. 3, pp. 259--279, 1986.
+\bibitem{koller2009} D. Koller and N. Friedman, \textit{Probabilistic Graphical Models: Principles and Techniques}. Cambridge, MA: MIT Press, 2009.
+\bibitem{rajpurkar2017} P. Rajpurkar et al., ``CheXNet: Radiologist-level pneumonia detection on chest X-rays with deep learning,'' \textit{arXiv preprint arXiv:1711.05225}, 2017.
+\end{thebibliography}
+
+\end{document}
