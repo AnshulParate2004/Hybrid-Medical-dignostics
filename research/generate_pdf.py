@@ -207,18 +207,18 @@ if os.path.exists(fig1_path):
     story.append(Image(fig1_path, width=6.8*inch, height=3.1*inch))
     story.append(Paragraph("Figure 1: Full-Stack Hybrid Generative-Probabilistic Pipeline Architecture.", cap_style))
 
-# 2. Methodology & Syllabus Practical Mapping
-story.append(Paragraph("2. Modular Methodology & Lab Practical Integration", h1_style))
+# 2. Methodology & Algorithmic Framework
+story.append(Paragraph("2. Proposed Methodology & Algorithmic Framework", h1_style))
 story.append(Paragraph(
-    "Our framework synthesizes the core practical topics of the Deep Learning & Probabilistic Graphical Models syllabus into an end-to-end clinical decision-support pipeline:",
+    "Our framework synthesizes deep representation learning with probabilistic graphical modeling into an end-to-end clinical decision-support pipeline:",
     body_style
 ))
-story.append(Paragraph("• <b>Practical 6 (Convolutional Autoencoder):</b> A 4-layer convolutional encoder-decoder with batch normalization and LeakyReLU activations compresses healthy baseline scans into a 32-dimensional bottleneck latent representation z. Trained strictly on normal controls, foreign structural lesions generate elevated reconstruction residuals.", bullet_style))
-story.append(Paragraph("• <b>Practical 3 (Markov Random Field Spatial Lattice):</b> A 2D lattice MRF models spatial pixel dependencies via an Ising-style clique potential penalty (β=1.0). Optimized via Iterated Conditional Modes (ICM) checkerboard updates, it eliminates false-positive pixel noise to produce contiguous lesion masks.", bullet_style))
-story.append(Paragraph("• <b>Practical 4 (Restricted Boltzmann Machine Latent Prior):</b> A 32-visible, 64-hidden unit RBM trained via Contrastive Divergence (CD-1) monitors the latent bottleneck z, measuring thermodynamic Free Energy F(z) to catch out-of-distribution representations.", bullet_style))
-story.append(Paragraph("• <b>Practical 1 (Joint & Conditional Probability Distributions):</b> Constructs empirical cross-tabulation matrices of Disease × AnomalyScore, proves ∑ Joint = 1.0, and computes marginal prevalence and conditional risks.", bullet_style))
-story.append(Paragraph("• <b>Practical 2 (Bayesian Networks & Variable Elimination):</b> Learns a DAG: Age → Disease → {AnomalyScore, RBMEnergy} using Bayesian Estimator with BDeu prior. Exact variable elimination calculates calibrated posteriors P(Disease | Evidence).", bullet_style))
-story.append(Paragraph("• <b>Practical 5 (Discrete-Time Markov Chains):</b> Formulates a 3-state patient prognosis chain across Stable, Observation, and Critical states, verifying the analytic stationary distribution πP = π.", bullet_style))
+story.append(Paragraph("• <b>Deep Generative Vision (Convolutional Autoencoder):</b> A 4-layer convolutional encoder-decoder with batch normalization and LeakyReLU activations compresses healthy baseline scans into a 128-dimensional bottleneck latent representation z. Trained strictly on normal controls, foreign structural lesions generate elevated reconstruction residuals.", bullet_style))
+story.append(Paragraph("• <b>Spatial Regularization (Markov Random Field Spatial Lattice):</b> A 2D lattice MRF models spatial pixel dependencies via a Potts-style clique potential penalty (β=1.0). Optimized via Iterated Conditional Modes (ICM) checkerboard updates, it eliminates false-positive pixel noise to produce contiguous lesion masks.", bullet_style))
+story.append(Paragraph("• <b>Energy-Based Latent Prior (Restricted Boltzmann Machine):</b> An RBM trained via Contrastive Divergence (CD-1) monitors the latent bottleneck z, measuring thermodynamic Free Energy F(z) to catch out-of-distribution representations.", bullet_style))
+story.append(Paragraph("• <b>Empirical Joint & Conditional Probability Distributions:</b> Constructs empirical cross-tabulation matrices of Disease × AnomalyScore, verifies ∑ Joint = 1.0, and computes marginal prevalence and conditional risks.", bullet_style))
+story.append(Paragraph("• <b>Causal Graphical Modeling (Bayesian Networks & Variable Elimination):</b> Learns a DAG: Age → Disease → {AnomalyScore, RBMEnergy} using Bayesian Estimator with BDeu prior. Exact variable elimination calculates calibrated posteriors P(Disease | Evidence).", bullet_style))
+story.append(Paragraph("• <b>Longitudinal Patient Trajectory (Discrete-Time Markov Chains):</b> Formulates a 3-state patient prognosis chain across Stable, Observation, and Critical states, verifying the analytic stationary distribution πP = π.", bullet_style))
 
 # Figure 4 (Visual Progression)
 fig4_path = os.path.join(FIG_DIR, "fig4_visual_progression.png")
@@ -231,7 +231,7 @@ if os.path.exists(fig4_path):
 # 3. Experimental Evaluation
 story.append(Paragraph("3. Quantitative Benchmarks & Experimental Results", h1_style))
 story.append(Paragraph(
-    "The framework was implemented in PyTorch and evaluated on an Nvidia T4 GPU (Google Colab environment). The training cohort comprised 6,000 normal baseline scans, and the independent test cohort evaluated 2,000 scans (1,000 normal controls and 1,000 pathological anomalies) at 32×32 resolution.",
+    "The framework was implemented in PyTorch and evaluated on an Nvidia T4 GPU (Google Colab environment). The training cohort comprised 6,000 normal baseline scans, and the independent test cohort evaluated 2,000 scans (1,000 normal controls and 1,000 pathological anomalies) at 128×128 resolution.",
     body_style
 ))
 

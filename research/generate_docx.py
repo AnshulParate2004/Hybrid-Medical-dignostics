@@ -136,39 +136,39 @@ add_p(
 add_image_box("fig1_architecture.png", "Figure 1: Full-Stack Hybrid Generative-Probabilistic Pipeline Architecture.")
 
 # Section 2
-add_heading_1("2. Modular Methodology & Lab Syllabus Integration")
+add_heading_1("2. Proposed Methodology & Algorithmic Framework")
 add_p(
-    "Our framework synthesizes the individual theoretical pillars taught across the academic curriculum into an integrated, modular diagnostic pipeline:"
+    "Our framework synthesizes deep representation learning with foundational probabilistic graphical modeling into an integrated, modular diagnostic pipeline:"
 )
 add_p(
-    "A Convolutional Autoencoder (ConvAE) with four convolutional layers, batch normalization, and LeakyReLU activations compresses healthy baseline scans into a 32-dimensional bottleneck latent representation z. Trained strictly on normal controls, foreign structural pathologies generate high reconstruction residuals.",
-    "• Practical 6 (Deep Generative Autoencoders):"
+    "A Convolutional Autoencoder (ConvAE) with four convolutional layers, batch normalization, and LeakyReLU activations compresses healthy baseline scans into a 128-dimensional bottleneck latent representation z. Trained strictly on normal controls, foreign structural pathologies generate prominent reconstruction residuals.",
+    "• Deep Generative Vision (Convolutional Autoencoder):"
 )
 add_p(
-    "A 2D lattice MRF models spatial dependencies across pixel labels y ∈ {0, 1}. Using an Ising-style clique potential penalty β = 1.0, the MRF penalizes isolated noisy pixels and clusters contiguous anatomical lesion regions via Iterated Conditional Modes (ICM).",
-    "• Practical 3 (Markov Random Fields):"
+    "A 2D lattice MRF models spatial dependencies across pixel labels y ∈ {0, 1}. Using an Potts-style clique potential penalty β = 1.0, the MRF penalizes isolated noisy pixels and clusters contiguous anatomical lesion regions via Iterated Conditional Modes (ICM).",
+    "• Spatial Regularization (2D Lattice Markov Random Field):"
 )
 add_p(
-    "A Restricted Boltzmann Machine (32 visible, 64 hidden units) trained via Contrastive Divergence (CD-1) monitors the latent bottleneck z. It computes thermodynamic Free Energy F(z) to catch out-of-distribution representations.",
-    "• Practical 4 (Restricted Boltzmann Machines):"
+    "A Restricted Boltzmann Machine (RBM) trained via Contrastive Divergence (CD-1) monitors the latent bottleneck z. It computes thermodynamic Free Energy F(z) to detect semantic out-of-distribution shifts.",
+    "• Energy-Based Latent Prior (Restricted Boltzmann Machine):"
 )
 add_p(
-    "Constructs the empirical joint probability matrix P(Disease, AnomalyScore), verifies ∑ Joint = 1.0, and computes marginal disease prevalence and conditional risks.",
-    "• Practical 1 (Joint & Conditional Distributions):"
+    "Constructs empirical joint probability matrices P(Disease, AnomalyScore), verifies ∑ Joint = 1.0, and computes marginal disease prevalence and conditional risks.",
+    "• Empirical Joint Probability & Risk Analysis:"
 )
 add_p(
     "Learns a Directed Acyclic Graph (DAG) with nodes Age → Disease → {AnomalyScore, RBMEnergy} using the Bayesian Estimator with a BDeu prior. Variable Elimination computes exact calibrated posteriors P(Disease | Evidence).",
-    "• Practical 2 (Bayesian Networks & Inference):"
+    "• Causal Graphical Modeling (Directed Bayesian Network):"
 )
 add_p(
     "A 3-state stochastic chain models temporal patient health transitions across Stable, Observation, and Critical states, computing the analytic stationary distribution πP = π.",
-    "• Practical 5 (Markov Chains & Stationary Distributions):"
+    "• Longitudinal Patient Trajectory (Discrete-Time Markov Chain):"
 )
 
 # Section 3
 add_heading_1("3. Experimental Evaluation & Quantitative Benchmarks")
 add_p(
-    "The framework was implemented in PyTorch and evaluated on an Nvidia T4 GPU on Google Colab across 6,000 normal baseline training scans and 2,000 test scans (1,000 normal controls and 1,000 pathological anomalies)."
+    "The framework was implemented in PyTorch and evaluated on an Nvidia T4 GPU on Google Colab across 6,000 normal baseline training scans and 2,000 test scans (1,000 normal controls and 1,000 pathological anomalies) at 128×128 resolution."
 )
 
 # Table 1: AUROC
