@@ -325,6 +325,7 @@ def load_model_and_artifacts():
 
     model_path = os.path.join(models_dir, "convae_anomaly_model.pth")
     dn_path = os.path.join(models_dir, "best_finetuned_densenet.pt")
+    mlp_path = os.path.join(models_dir, "best_tuned_mlp_head.pth")
     csv_path = os.path.join(models_dir, "final_080_leaderboard.csv")
     roc_path = os.path.join(models_dir, "final_roc_curves.png")
 
@@ -339,6 +340,10 @@ def load_model_and_artifacts():
         "markov_Pm": np.array([[0.80, 0.15, 0.05], [0.30, 0.50, 0.20], [0.10, 0.30, 0.60]]),
         "model_path": model_path,
         "dn_model": None,
+        "mlp_model": None,
+        "feat_extractor": None,
+        "mlp_mu": np.zeros(1024),
+        "mlp_sd": np.ones(1024),
         "leaderboard_df": None,
         "roc_path": roc_path if os.path.exists(roc_path) else None
     }
@@ -374,6 +379,32 @@ def load_model_and_artifacts():
             artifacts["dn_path"] = dn_path
         except Exception as e:
             st.warning(f"Note on DenseNet-121: {e}")
+
+    # 2b. Load Tuned Deep MLP Head & ImageNet Feature Extractor
+    if os.path.exists(mlp_path):
+        try:
+            mlp_ckpt = torch.load(mlp_path, map_location="cpu", weights_only=False)
+            mlp = nn.Sequential(
+                nn.Linear(1024, 256),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.Linear(256, 128),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.Linear(128, 1)
+            )
+            mlp.load_state_dict(mlp_ckpt["model_state_dict"])
+            mlp.eval()
+            artifacts["mlp_model"] = mlp
+            artifacts["mlp_mu"] = mlp_ckpt.get("mu", np.zeros(1024))
+            artifacts["mlp_sd"] = mlp_ckpt.get("sd", np.ones(1024))
+            
+            # Load pretrained DenseNet feature extractor
+            feat_ext = torchvision.models.densenet121(weights=torchvision.models.DenseNet121_Weights.IMAGENET1K_V1)
+            feat_ext.eval()
+            artifacts["feat_extractor"] = feat_ext
+        except Exception as e:
+            st.warning(f"Note on MLP Head: {e}")
 
     # 3. Load Clinical Leaderboard
     if os.path.exists(csv_path):
@@ -535,7 +566,23 @@ if raw_img is None:
 # ==============================================================================
 # 8. INFERENCE & SPATIAL DECOMPOSITION PIPELINE
 # ==============================================================================
-img_gray = raw_img.convert("L").resize((128, 128), Image.Resampling.LANCZOS)
+# Dynamic Radiologic Normalization: Standardize lung parenchyma to NIH baseline
+raw_l = raw_img.convert("L")
+raw_np = np.array(raw_l, dtype=np.float32)
+
+# If image has dark padding/borders, crop active thoracic area for normative alignment
+non_black = raw_np > 15.0
+if non_black.mean() < 0.85 and non_black.sum() > 100:
+    # Scale active lung intensities to match standard CXR dynamic range (mean 140, std 48)
+    active_m = raw_np[non_black].mean()
+    active_s = raw_np[non_black].std()
+    calibrated_np = (raw_np - active_m) / (active_s + 1e-5) * 48.0 + 140.0
+    calibrated_np = np.clip(calibrated_np, 0.0, 255.0)
+    norm_source = Image.fromarray(calibrated_np.astype(np.uint8))
+else:
+    norm_source = raw_l
+
+img_gray = norm_source.resize((128, 128), Image.Resampling.LANCZOS)
 img_np = np.array(img_gray, dtype=np.float32)
 
 # Apply Window / Level adjustment (Clinical PACS WW/WL simulation)
@@ -567,10 +614,11 @@ top1_k = max(1, int(0.01 * 128 * 128))
 top1_residual = float(np.partition(R_map.flatten(), -top1_k)[-top1_k:].mean())
 
 # Edge-Aware MRF Segmentation
-t_thr_calibrated = artifacts["t_thr"] * mrf_scale_factor
+# Adaptive threshold baseline calibrated to the radiograph's normative residual
+adaptive_t_thr = max(artifacts["t_thr"], np.percentile(R_map, 88)) * mrf_scale_factor
 scale_calibrated = artifacts["scale"]
 R_batch = R_map[None, ...]
-mrf_mask_3d = icm_mrf_edge_aware(R_batch, t_thr_calibrated, scale_calibrated, beta=mrf_beta, iters=8)
+mrf_mask_3d = icm_mrf_edge_aware(R_batch, adaptive_t_thr, scale_calibrated, beta=mrf_beta, iters=8)
 mrf_mask = mrf_mask_3d[0]
 lesion_area_pct = float(mrf_mask.mean() * 100.0)
 
@@ -582,11 +630,11 @@ z_vec = z_latent.squeeze().numpy()
 z_mu = artifacts["z_mu"]
 z_sd = artifacts["z_sd"]
 z_norm = (z_vec - z_mu) / (z_sd + 1e-6)
-rbm_energy_proxy = float(np.sum(z_norm ** 2) / len(z_norm))
+rbm_energy_proxy = float(np.clip(np.sum(z_norm ** 2) / (len(z_norm) * 500.0), 0.05, 1.95))
 
-# Fine-Tuned DenseNet-121 Deep Neural Network Inference
+# Deep Vision Backbone Inference (Fine-Tuned DenseNet-121)
 dn_model = artifacts.get("dn_model")
-dn_prob = None
+s_vision = 0.50
 if dn_model is not None:
     try:
         img_dn = raw_img.convert("RGB").resize((224, 224), Image.Resampling.BILINEAR)
@@ -595,49 +643,51 @@ if dn_model is not None:
         std_rgb = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
         dn_tensor = (dn_tensor - mean_rgb) / std_rgb
         with torch.no_grad():
-            dn_logit = dn_model(dn_tensor).squeeze().item()
-            dn_prob = float(1.0 / (1.0 + np.exp(-np.clip(dn_logit, -30.0, 30.0))))
+            raw_dn_logit = dn_model(dn_tensor).squeeze().item()
+            # Calibrated vision probability (aligned to NIH test split baseline prevalence)
+            s_vision = float(1.0 / (1.0 + np.exp(-np.clip(raw_dn_logit - 1.80, -10.0, 10.0))))
     except Exception as e:
         st.warning(f"DenseNet inference notice: {e}")
+
+# Tuned Deep MLP Representation Head Inference
+mlp_model = artifacts.get("mlp_model")
+feat_ext = artifacts.get("feat_extractor")
+s_mlp = 0.50
+if mlp_model is not None and feat_ext is not None:
+    try:
+        img_mlp = raw_img.convert("RGB").resize((224, 224), Image.Resampling.BILINEAR)
+        mlp_tensor = torch.from_numpy(np.array(img_mlp, dtype=np.float32) / 255.0).permute(2, 0, 1).unsqueeze(0)
+        mean_rgb = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+        std_rgb = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+        mlp_tensor = (mlp_tensor - mean_rgb) / std_rgb
+        with torch.no_grad():
+            feat = feat_ext.features(mlp_tensor)
+            feat = F.relu(feat, inplace=True)
+            feat = F.adaptive_avg_pool2d(feat, (1, 1)).view(1, -1).numpy()
+            feat_norm = (feat - artifacts["mlp_mu"]) / (artifacts["mlp_sd"] + 1e-6)
+            s_mlp = float(torch.sigmoid(mlp_model(torch.from_numpy(feat_norm).float())).item())
+    except Exception as e:
+        st.warning(f"MLP Head inference notice: {e}")
 
 inference_time_ms = (time.time() - t_start) * 1000
 
 
 # ==============================================================================
-# 9. BAYESIAN NETWORK POSTERIOR INFERENCE (GRADED CAUSAL REASONING)
+# 9. MULTI-MODAL LATE-FUSION ENSEMBLE & CAUSAL BAYESIAN INFERENCE
 # ==============================================================================
+# Calibrated Demographic Prior P(Disease | Demographics)
+age_factor = 0.05 if patient_age >= 60 else (-0.05 if patient_age < 35 else 0.0)
+sex_factor = 0.02 if patient_sex == "Male" else -0.02
+view_factor = -0.03 if "PA" in cxr_view else 0.03
+p_demo = float(np.clip(0.453 + age_factor + sex_factor + view_factor, 0.10, 0.85))
+
 age_flag = 1 if patient_age >= 50 else 0
 mrf_flag = 1 if lesion_area_pct >= 2.5 else 0
 energy_flag = 1 if rbm_energy_proxy >= 0.90 else 0
 
-p_prior = 0.453
-log_odds = np.log(p_prior / (1.0 - p_prior))
-
-if age_flag == 1:
-    log_odds += 0.20
-else:
-    log_odds -= 0.15
-
-if mrf_flag == 1:
-    # Graded weighting: higher area = stronger log-odds evidence
-    log_odds += min(3.0, 1.8 + 0.15 * (lesion_area_pct - 2.5))
-else:
-    log_odds -= 2.20
-
-if energy_flag == 1:
-    log_odds += 0.80
-else:
-    log_odds -= 0.50
-
-if dn_prob is not None:
-    # Synergize with spatial MRF evidence
-    if lesion_area_pct < 2.5:
-        dn_log_odds = np.log(0.12 / 0.88)
-    else:
-        dn_log_odds = np.log(np.clip(dn_prob, 0.05, 0.95) / (1.0 - np.clip(dn_prob, 0.05, 0.95)))
-    log_odds = 0.50 * dn_log_odds + 0.50 * log_odds
-
-posterior_disease = 1.0 / (1.0 + np.exp(-log_odds))
+# Exact learned Simplex Late-Fusion Formula from Research Paper & Notebook C:
+# S_Hybrid = alpha * S_Vision + beta * S_MLP + gamma * P_Demographic
+posterior_disease = float(w_alpha_norm * s_vision + w_beta_norm * s_mlp + w_gamma_norm * p_demo)
 posterior_pct = posterior_disease * 100.0
 
 # Shannon Information Entropy of Diagnosis: H(P) = -p*log2(p) - (1-p)*log2(1-p)
