@@ -1,34 +1,78 @@
 """
 MedAI Diagnostic PACS Workstation | Enterprise Clinical Suite.
-Entrypoint orchestrator launching modular clinical components from src/hybrid_medical_diagnostics.
+Entrypoint orchestrator launching modular clinical components from src/.
 """
 
+import os
 import sys
 from pathlib import Path
 import streamlit as st
 
-# Ensure src/ is on Python search path
-SRC_DIR = Path(__file__).resolve().parent / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
+# Configure multi-environment search paths (Streamlit Cloud, Local, Docker)
+_ROOT = Path(__file__).resolve().parent
+_SRC = _ROOT / "src"
+_HMD = _SRC / "hybrid_medical_diagnostics"
 
-from hybrid_medical_diagnostics import (
-    inject_pacs_theme,
-    load_model_and_artifacts,
-    get_default_models_dir,
-    render_pacs_sidebar,
-    render_pacs_header,
-    render_acquisition_selector,
-    render_diagnostic_banner,
-    render_spatial_decomposition_grid,
-    render_enterprise_tabs,
-    preprocess_radiograph,
-    run_convae_inference,
-    run_vision_backbone,
-    run_mlp_head,
-    compute_fusion_and_risk,
-    compute_markov_prognosis
-)
+for p in [str(_ROOT), str(_SRC), str(_HMD)]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+# Resilient import cascade ensuring zero-failure deployment
+try:
+    from src import (
+        inject_pacs_theme,
+        load_model_and_artifacts,
+        get_default_models_dir,
+        render_pacs_sidebar,
+        render_pacs_header,
+        render_acquisition_selector,
+        render_diagnostic_banner,
+        render_spatial_decomposition_grid,
+        render_enterprise_tabs,
+        preprocess_radiograph,
+        run_convae_inference,
+        run_vision_backbone,
+        run_mlp_head,
+        compute_fusion_and_risk,
+        compute_markov_prognosis
+    )
+except ImportError:
+    try:
+        from hybrid_medical_diagnostics import (
+            inject_pacs_theme,
+            load_model_and_artifacts,
+            get_default_models_dir,
+            render_pacs_sidebar,
+            render_pacs_header,
+            render_acquisition_selector,
+            render_diagnostic_banner,
+            render_spatial_decomposition_grid,
+            render_enterprise_tabs,
+            preprocess_radiograph,
+            run_convae_inference,
+            run_vision_backbone,
+            run_mlp_head,
+            compute_fusion_and_risk,
+            compute_markov_prognosis
+        )
+    except ImportError:
+        from src.hybrid_medical_diagnostics import (
+            inject_pacs_theme,
+            load_model_and_artifacts,
+            get_default_models_dir,
+            render_pacs_sidebar,
+            render_pacs_header,
+            render_acquisition_selector,
+            render_diagnostic_banner,
+            render_spatial_decomposition_grid,
+            render_enterprise_tabs,
+            preprocess_radiograph,
+            run_convae_inference,
+            run_vision_backbone,
+            run_mlp_head,
+            compute_fusion_and_risk,
+            compute_markov_prognosis
+        )
 
 
 # ==============================================================================
