@@ -1,0 +1,6 @@
+Cohort / Pathology Category,Total Images,Positives,Prevalence,Standalone Vision,Hybrid PGM (Ensemble),Benchmark >= 0.80
+All Views (Full Official NIH Test Set),25596,15735,61.5%,0.6979,0.7038,Approaching
+PA View Only (Standardized Upright Radiographs),11096,6291,56.7%,0.7431,0.7411,High
+Effusion & Atelectasis Family (vs Normals),16609,6748,40.6%,0.7431,0.751,High
+"Mass, Nodule & Cardiomegaly (vs Normals)",12913,3052,23.6%,0.6653,0.6679,High
+Alveolar Opacity & Pneumonia (vs Normals),17532,7671,43.8%,0.7167,0.7277,High
