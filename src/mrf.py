@@ -62,7 +62,8 @@ def analyze_lesions(
     for i, s in enumerate(slices):
         c_mask = (labeled == (i + 1))
         p_cnt = int(c_mask.sum())
-        if p_cnt < 4:
+        # Filter sub-pixel deconvolution noise speckles (<20 px in 128x128)
+        if p_cnt < 20:
             continue
         cy, cx = center_of_mass(c_mask)
         ymin, ymax = s[0].start, s[0].stop

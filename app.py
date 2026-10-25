@@ -157,7 +157,8 @@ risk_data = compute_fusion_and_risk(
     w_beta_norm=sidebar_params["w_beta_norm"],
     w_gamma_norm=sidebar_params["w_gamma_norm"],
     lesion_area_pct=recon_data["lesion_area_pct"],
-    detected_lesions_count=len(recon_data["detected_lesions"])
+    detected_lesions_count=len(recon_data["detected_lesions"]),
+    mean_residual=recon_data["mean_residual"]
 )
 
 # Stage F: Discrete-Time Markov Chain (DTMC) Prognosis Rollout

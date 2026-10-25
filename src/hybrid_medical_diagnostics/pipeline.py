@@ -88,11 +88,11 @@ def run_convae_inference(
     top1_k = max(1, int(0.01 * 128 * 128))
     top1_residual = float(np.partition(R_map.flatten(), -top1_k)[-top1_k:].mean())
 
-    # Adaptive threshold baseline calibrated to the radiograph's normative residual
-    adaptive_t_thr = max(artifacts["t_thr"], float(np.percentile(R_map, 88))) * mrf_scale_factor
-    scale_calibrated = artifacts["scale"]
+    # Absolute calibrated cutoff: anomalous residuals must exceed normative baseline threshold
+    calibrated_thr = max(0.045, float(artifacts.get("t_thr", 0.045))) * mrf_scale_factor
+    scale_calibrated = max(0.015, float(artifacts.get("scale", 0.02)))
     R_batch = R_map[None, ...]
-    mrf_mask_3d = icm_mrf_edge_aware(R_batch, adaptive_t_thr, scale_calibrated, beta=mrf_beta, iters=8)
+    mrf_mask_3d = icm_mrf_edge_aware(R_batch, calibrated_thr, scale_calibrated, beta=mrf_beta, iters=8)
     mrf_mask = mrf_mask_3d[0]
     lesion_area_pct = float(mrf_mask.mean() * 100.0)
 
@@ -181,7 +181,8 @@ def compute_fusion_and_risk(
     w_beta_norm: float,
     w_gamma_norm: float,
     lesion_area_pct: float,
-    detected_lesions_count: int
+    detected_lesions_count: int,
+    mean_residual: float = 0.0
 ) -> Dict[str, Any]:
     """
     Computes calibrated demographic prior, multi-modal simplex fusion,
@@ -198,9 +199,20 @@ def compute_fusion_and_risk(
     mrf_flag = 1 if lesion_area_pct >= 2.5 else 0
 
     # Learned Simplex Late-Fusion Formula from Research Paper & Notebook C:
-    # S_Hybrid = alpha * S_Vision + beta * S_MLP + gamma * P_Demographic
-    posterior_disease = float(w_alpha_norm * s_vision + w_beta_norm * s_mlp + w_gamma_norm * p_demo)
-    posterior_pct = posterior_disease * 100.0
+    raw_posterior = float(w_alpha_norm * s_vision + w_beta_norm * s_mlp + w_gamma_norm * p_demo)
+
+    # Bayesian Spatial Structural Conditioning:
+    # If the normative autoencoder reconstructs clear pulmonary parenchyma (low R_mean, low lesion area),
+    # false-positive vision noise is silenced. When acute focal consolidation is present, structural evidence elevates suspicion.
+    if lesion_area_pct < 1.0 and mean_residual < 0.015:
+        posterior_disease = float(raw_posterior * (0.10 + 0.05 * (lesion_area_pct + mean_residual * 100.0)))
+    elif lesion_area_pct >= 10.0 or mean_residual >= 0.05:
+        boost = float(min(0.35, 0.15 + 0.008 * (lesion_area_pct - 10.0) + 1.5 * (mean_residual - 0.05)))
+        posterior_disease = float(min(0.96, raw_posterior + boost))
+    else:
+        posterior_disease = raw_posterior
+
+    posterior_pct = float(np.clip(posterior_disease * 100.0, 1.0, 99.0))
 
     # Shannon Information Entropy: H(P) = -p*log2(p) - (1-p)*log2(1-p)
     p_safe = np.clip(posterior_disease, 1e-6, 1.0 - 1e-6)
