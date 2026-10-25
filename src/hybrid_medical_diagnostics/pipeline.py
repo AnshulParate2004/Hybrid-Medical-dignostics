@@ -1,12 +1,5 @@
 """
 Diagnostic Inference and Probabilistic Reasoning Pipeline.
-Implements:
-1. Dynamic radiologic normalization and thoracic windowing
-2. Autoencoder reconstruction and spatial residual calculation
-3. DenseNet-121 visual feature scoring
-4. Deep MLP representation scoring
-5. Multi-modal late-fusion ensemble
-6. Markov chain DTMC prognosis rollout
 """
 
 import time
@@ -16,7 +9,10 @@ from PIL import Image
 import torch
 import torch.nn.functional as F
 
-from .mrf import icm_mrf_edge_aware, analyze_lesions
+try:
+    from .mrf import icm_mrf_edge_aware, analyze_lesions
+except ImportError:
+    from mrf import icm_mrf_edge_aware, analyze_lesions
 
 
 def preprocess_radiograph(
@@ -34,7 +30,6 @@ def preprocess_radiograph(
     raw_np = np.array(raw_l, dtype=np.float32)
 
     # Dynamic Radiologic Normalization: Standardize lung parenchyma to NIH baseline
-    # If image has dark padding/borders, crop active thoracic area for normative alignment
     non_black = raw_np > 15.0
     if non_black.mean() < 0.85 and non_black.sum() > 100:
         active_m = raw_np[non_black].mean()
@@ -190,13 +185,11 @@ def compute_fusion_and_risk(
     Computes calibrated demographic prior, multi-modal simplex fusion,
     information entropy, and RADS / ICD-10 diagnostic stratification.
     """
-    # Demographic Bayesian prior
     age_factor = 0.05 if patient_age >= 60 else (-0.05 if patient_age < 35 else 0.0)
     sex_factor = 0.02 if patient_sex == "Male" else -0.02
     view_factor = -0.03 if "PA" in cxr_view else 0.03
     p_demo = float(np.clip(0.453 + age_factor + sex_factor + view_factor, 0.10, 0.85))
 
-    # Evidence node flags for Bayesian DAG visualization
     age_flag = 1 if patient_age >= 50 else 0
     mrf_flag = 1 if lesion_area_pct >= 2.5 else 0
 
@@ -216,56 +209,42 @@ def compute_fusion_and_risk(
 
     posterior_pct = float(np.clip(posterior_disease * 100.0, 1.0, 99.0))
 
-    # Shannon Information Entropy: H(P) = -p*log2(p) - (1-p)*log2(1-p)
     p_safe = np.clip(posterior_disease, 1e-6, 1.0 - 1e-6)
     entropy_bits = float(-p_safe * np.log2(p_safe) - (1.0 - p_safe) * np.log2(1.0 - p_safe))
 
     if posterior_pct >= 65.0:
-        if lesion_area_pct >= 20.0:
-            disease_name = "Bacterial Pneumonia (Severe Lobar Consolidation)"
-        elif lesion_area_pct >= 5.0:
-            disease_name = "Acute Pneumonia (Focal Alveolar Infiltrate)"
-        else:
-            disease_name = "Pulmonary Consolidation & Infection"
+        clinical_finding = "Pathological Pulmonary Anomaly Detected"
         risk_label = "HIGH CLINICAL SUSPICION"
-        rads_tier = "RADS-4 / RADS-5 (Suspicious / High Probability of Infection)"
-        icd10_code = "J18.9 (Pneumonia, unspecified organism)"
+        rads_tier = "RADS-4 / RADS-5 (Suspicious / High Probability of Pathology)"
+        icd10_code = "R91.8 (Abnormal finding on diagnostic imaging of lung)"
         risk_color = "#DC2626"
         badge_class = "badge-alert"
         banner_class = "diag-banner-alert"
-        risk_summary = f"Focal pulmonary consolidation detected ({lesion_area_pct:.2f}% lung field affected, {detected_lesions_count} clusters). Edge-preserving MRF energy minimization confirmed persistent lesion boundaries."
+        risk_summary = f"Persistent localized lesion detected ({lesion_area_pct:.2f}% lung field affected, {detected_lesions_count} cluster(s)). Edge-preserving MRF energy minimization confirms significant structural departure from normative baseline."
     elif posterior_pct >= 30.0:
-        disease_name = "Subtle Interstitial Infiltrate / Equivocal Opacity"
+        clinical_finding = "Equivocal / Indeterminate Structural Variation"
         risk_label = "INDETERMINATE / OBSERVATION"
         rads_tier = "RADS-3 (Equivocal / Close Interval Surveillance)"
-        icd10_code = "J98.4 (Other pulmonary disorders / Infiltrate)"
+        icd10_code = "R91.8 (Abnormal finding on diagnostic imaging of lung)"
         risk_color = "#D97706"
         badge_class = "badge-warn"
         banner_class = "diag-banner-warn"
-        risk_summary = f"Subtle architectural variation detected ({lesion_area_pct:.2f}% affected). Follow-up contrast imaging or clinical surveillance advised."
+        risk_summary = f"Subtle architectural variation detected ({lesion_area_pct:.2f}% affected). Follow-up contrast imaging or interval surveillance advised."
     else:
-        disease_name = "Healthy Normal (No Acute Cardiopulmonary Abnormality)"
+        clinical_finding = "Normative Baseline (No Acute Cardiopulmonary Anomaly)"
         risk_label = "NORMAL / LOW RISK"
         rads_tier = "RADS-1 / RADS-2 (Negative / Unremarkable Normative Baseline)"
         icd10_code = "Z00.00 (General adult examination without abnormal findings)"
         risk_color = "#059669"
         badge_class = "badge-normal"
         banner_class = "diag-banner-normal"
-        risk_summary = f"Normative reconstruction error within calibrated tolerances ({lesion_area_pct:.2f}% residual clusters). No focal acute lesion identified."
-
-    differential = {
-        "Alveolar Pneumonia / Consolidation": float(np.clip(posterior_disease * 0.95 + (lesion_area_pct / 50.0) * 0.20, 0.01, 0.96)),
-        "Interstitial Infiltration": float(np.clip(posterior_disease * 0.65 + (mean_residual / 0.15) * 0.15, 0.02, 0.85)),
-        "Pleural Effusion & Atelectasis": float(np.clip(posterior_disease * 0.40 + (0.15 if lesion_area_pct > 5.0 else 0.02), 0.01, 0.70)),
-        "Healthy Baseline (No Finding)": float(np.clip(1.0 - posterior_disease, 0.01, 0.98))
-    }
+        risk_summary = f"Reconstruction residuals within calibrated normative tolerances ({lesion_area_pct:.2f}% residual clusters). No focal acute lesion identified."
 
     return {
         "p_demo": p_demo,
         "age_flag": age_flag,
         "mrf_flag": mrf_flag,
-        "disease_name": disease_name,
-        "differential": differential,
+        "clinical_finding": clinical_finding,
         "posterior_disease": posterior_disease,
         "posterior_pct": posterior_pct,
         "entropy_bits": entropy_bits,
@@ -298,7 +277,6 @@ def compute_markov_prognosis(
     p2 = p1 @ Pm
     p3 = p2 @ Pm
 
-    # Stationary distribution pi * Pm = pi
     w, v = np.linalg.eig(Pm.T)
     pi = np.real(v[:, np.argmin(abs(w - 1))])
     pi = pi / pi.sum()

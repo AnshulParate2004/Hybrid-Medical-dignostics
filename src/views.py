@@ -91,13 +91,13 @@ def render_acquisition_selector(models_dir: str) -> Tuple[Optional[Image.Image],
 
 
 def render_diagnostic_banner(risk_data: Dict[str, Any]) -> None:
-    """Renders the top clinical impression alert banner with explicit disease name."""
-    disease = risk_data.get("disease_name", risk_data.get("risk_label", "Undifferentiated"))
+    """Renders the top clinical impression alert banner with honest anomaly finding."""
+    finding = risk_data.get("clinical_finding", risk_data.get("risk_label", "Undifferentiated"))
     st.markdown(f"""
 <div class="{risk_data['banner_class']}">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
         <div style="font-weight: 800; font-size: 19px; color: {risk_data['risk_color']}; letter-spacing: -0.01em;">
-            🩻 PRIMARY DIAGNOSIS: {disease}
+            🩻 DIAGNOSTIC FINDING: {finding}
         </div>
         <div class="pacs-badge" style="background: #FFFFFF; border: 1.5px solid {risk_data['risk_color']}; color: {risk_data['risk_color']}; font-size: 13px; font-weight: 700;">
             {risk_data['posterior_pct']:.1f}% Posterior Risk
@@ -233,22 +233,7 @@ def render_enterprise_tabs(
             </div>
             """, unsafe_allow_html=True)
 
-        if "differential" in risk_data:
-            st.markdown("---")
-            st.markdown("##### 🩺 Multi-Pathology Differential Diagnosis Likelihood")
-            diff_cols = st.columns(4)
-            diff_items = list(risk_data["differential"].items())
-            for idx, (cond, prob) in enumerate(diff_items):
-                with diff_cols[idx]:
-                    bar_color = "#DC2626" if prob >= 0.50 else ("#D97706" if prob >= 0.25 else "#059669")
-                    st.markdown(f"""
-                    <div class="metric-card" style="padding: 12px 14px; margin-bottom: 6px;">
-                        <div class="metric-label" style="font-size: 10px;">{cond}</div>
-                        <div class="metric-value" style="font-size: 20px; color: {bar_color};">{prob*100:.1f}%</div>
-                        <div class="metric-sub">Estimated Probability</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.progress(min(1.0, max(0.0, prob)))
+
 
     with tab_morph:
         st.markdown("#### 🗺️ Automated Radiologic Cluster Coordinates & Anatomical Zones")
@@ -370,7 +355,7 @@ def render_enterprise_tabs(
 **Accession Number**: ACC-{int(time.time()) % 1000000}  
 **Patient Age**: {sidebar_params['patient_age']} | **Sex**: {sidebar_params['patient_sex']} | **Projection**: {sidebar_params['cxr_view']}  
 **Diagnostic Category**: {risk_data['rads_tier']}  
-**Primary Diagnosis**: {risk_data.get('disease_name', 'Undifferentiated')}  
+**Diagnostic Finding**: {risk_data.get('clinical_finding', 'Undifferentiated')}  
 **Primary ICD-10 Code**: {risk_data['icd10_code']}  
 
 ---
