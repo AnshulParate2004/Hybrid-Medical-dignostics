@@ -221,6 +221,12 @@ def compute_fusion_and_risk(
     entropy_bits = float(-p_safe * np.log2(p_safe) - (1.0 - p_safe) * np.log2(1.0 - p_safe))
 
     if posterior_pct >= 65.0:
+        if lesion_area_pct >= 20.0:
+            disease_name = "Bacterial Pneumonia (Severe Lobar Consolidation)"
+        elif lesion_area_pct >= 5.0:
+            disease_name = "Acute Pneumonia (Focal Alveolar Infiltrate)"
+        else:
+            disease_name = "Pulmonary Consolidation & Infection"
         risk_label = "HIGH CLINICAL SUSPICION"
         rads_tier = "RADS-4 / RADS-5 (Suspicious / High Probability of Infection)"
         icd10_code = "J18.9 (Pneumonia, unspecified organism)"
@@ -229,6 +235,7 @@ def compute_fusion_and_risk(
         banner_class = "diag-banner-alert"
         risk_summary = f"Focal pulmonary consolidation detected ({lesion_area_pct:.2f}% lung field affected, {detected_lesions_count} clusters). Edge-preserving MRF energy minimization confirmed persistent lesion boundaries."
     elif posterior_pct >= 30.0:
+        disease_name = "Subtle Interstitial Infiltrate / Equivocal Opacity"
         risk_label = "INDETERMINATE / OBSERVATION"
         rads_tier = "RADS-3 (Equivocal / Close Interval Surveillance)"
         icd10_code = "J98.4 (Other pulmonary disorders / Infiltrate)"
@@ -237,6 +244,7 @@ def compute_fusion_and_risk(
         banner_class = "diag-banner-warn"
         risk_summary = f"Subtle architectural variation detected ({lesion_area_pct:.2f}% affected). Follow-up contrast imaging or clinical surveillance advised."
     else:
+        disease_name = "Healthy Normal (No Acute Cardiopulmonary Abnormality)"
         risk_label = "NORMAL / LOW RISK"
         rads_tier = "RADS-1 / RADS-2 (Negative / Unremarkable Normative Baseline)"
         icd10_code = "Z00.00 (General adult examination without abnormal findings)"
@@ -245,10 +253,19 @@ def compute_fusion_and_risk(
         banner_class = "diag-banner-normal"
         risk_summary = f"Normative reconstruction error within calibrated tolerances ({lesion_area_pct:.2f}% residual clusters). No focal acute lesion identified."
 
+    differential = {
+        "Alveolar Pneumonia / Consolidation": float(np.clip(posterior_disease * 0.95 + (lesion_area_pct / 50.0) * 0.20, 0.01, 0.96)),
+        "Interstitial Infiltration": float(np.clip(posterior_disease * 0.65 + (mean_residual / 0.15) * 0.15, 0.02, 0.85)),
+        "Pleural Effusion & Atelectasis": float(np.clip(posterior_disease * 0.40 + (0.15 if lesion_area_pct > 5.0 else 0.02), 0.01, 0.70)),
+        "Healthy Baseline (No Finding)": float(np.clip(1.0 - posterior_disease, 0.01, 0.98))
+    }
+
     return {
         "p_demo": p_demo,
         "age_flag": age_flag,
         "mrf_flag": mrf_flag,
+        "disease_name": disease_name,
+        "differential": differential,
         "posterior_disease": posterior_disease,
         "posterior_pct": posterior_pct,
         "entropy_bits": entropy_bits,
