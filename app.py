@@ -147,19 +147,33 @@ s_mlp = run_mlp_head(
 )
 
 # Stage E: Multi-Modal Late-Fusion & Clinical Risk Stratification
-risk_data = compute_fusion_and_risk(
-    s_vision=s_vision,
-    s_mlp=s_mlp,
-    patient_age=sidebar_params["patient_age"],
-    patient_sex=sidebar_params["patient_sex"],
-    cxr_view=sidebar_params["cxr_view"],
-    w_alpha_norm=sidebar_params["w_alpha_norm"],
-    w_beta_norm=sidebar_params["w_beta_norm"],
-    w_gamma_norm=sidebar_params["w_gamma_norm"],
-    lesion_area_pct=recon_data["lesion_area_pct"],
-    detected_lesions_count=len(recon_data["detected_lesions"]),
-    mean_residual=recon_data["mean_residual"]
-)
+try:
+    risk_data = compute_fusion_and_risk(
+        s_vision=s_vision,
+        s_mlp=s_mlp,
+        patient_age=sidebar_params["patient_age"],
+        patient_sex=sidebar_params["patient_sex"],
+        cxr_view=sidebar_params["cxr_view"],
+        w_alpha_norm=sidebar_params["w_alpha_norm"],
+        w_beta_norm=sidebar_params["w_beta_norm"],
+        w_gamma_norm=sidebar_params["w_gamma_norm"],
+        lesion_area_pct=recon_data["lesion_area_pct"],
+        detected_lesions_count=len(recon_data["detected_lesions"]),
+        mean_residual=recon_data.get("mean_residual", 0.0)
+    )
+except TypeError:
+    risk_data = compute_fusion_and_risk(
+        s_vision=s_vision,
+        s_mlp=s_mlp,
+        patient_age=sidebar_params["patient_age"],
+        patient_sex=sidebar_params["patient_sex"],
+        cxr_view=sidebar_params["cxr_view"],
+        w_alpha_norm=sidebar_params["w_alpha_norm"],
+        w_beta_norm=sidebar_params["w_beta_norm"],
+        w_gamma_norm=sidebar_params["w_gamma_norm"],
+        lesion_area_pct=recon_data["lesion_area_pct"],
+        detected_lesions_count=len(recon_data["detected_lesions"])
+    )
 
 # Stage F: Discrete-Time Markov Chain (DTMC) Prognosis Rollout
 prognosis_data = compute_markov_prognosis(

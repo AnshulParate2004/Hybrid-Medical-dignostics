@@ -182,7 +182,9 @@ def compute_fusion_and_risk(
     w_gamma_norm: float,
     lesion_area_pct: float,
     detected_lesions_count: int,
-    mean_residual: float = 0.0
+    mean_residual: float = 0.0,
+    *args,
+    **kwargs
 ) -> Dict[str, Any]:
     """
     Computes calibrated demographic prior, multi-modal simplex fusion,

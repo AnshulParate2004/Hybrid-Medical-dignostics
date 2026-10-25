@@ -12,4 +12,4 @@ enableCORS = false
 enableXsrfProtection = false
 
 [client]
-showErrorDetails = true
+showErrorDetails = "full"
