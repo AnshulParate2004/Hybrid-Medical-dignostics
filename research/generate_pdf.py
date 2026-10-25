@@ -224,8 +224,8 @@ story.append(Paragraph("• <b>Longitudinal Patient Trajectory (Discrete-Time Ma
 fig4_path = os.path.join(FIG_DIR, "fig4_visual_progression.png")
 if os.path.exists(fig4_path):
     story.append(KeepTogether([
-        Image(fig4_path, width=6.8*inch, height=3.4*inch),
-        Paragraph("Figure 4: 4-Stage visual progression across generative reconstruction and MRF spatial denoising.", cap_style)
+        Image(fig4_path, width=6.8*inch, height=2.85*inch),
+        Paragraph("Figure 4: Five-stage visual decomposition and spatial lesion localization across representative clinical cases: (a) Input digital chest radiograph, (b) Normative ConvAE reconstruction, (c) High-frequency pixel residual energy map (X - X&#770;)<sup>2</sup>, (d) Contrast-adaptive Potts MRF binary segmentation isolating contiguous lesion geometry, and (e) Bounding box fusion overlay providing interpretable clinician guidance.", cap_style)
     ]))
 
 # 3. Experimental Evaluation
