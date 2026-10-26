@@ -67,101 +67,121 @@ plt.close()
 print("Saved fig1_architecture.png")
 
 
-# ==========================================
-# FIG 4: 4-Stage Visual Inspection Progression (REAL CHEST RADIOGRAPHS)
-# ==========================================
-class ConvAE(nn.Module):
-    def __init__(self, latent=128, img=128):
-        super().__init__()
-        s = img // 16
-        def blk(i, o):  return nn.Sequential(nn.Conv2d(i, o, 4, 2, 1), nn.BatchNorm2d(o), nn.LeakyReLU(0.2))
-        def dblk(i, o): return nn.Sequential(nn.ConvTranspose2d(i, o, 4, 2, 1), nn.BatchNorm2d(o), nn.LeakyReLU(0.2))
-        self.s = s
-        self.enc = nn.Sequential(blk(1, 32), blk(32, 64), blk(64, 128), blk(128, 256),
-                                 nn.Flatten(), nn.Linear(256 * s * s, latent))
-        self.fc = nn.Linear(latent, 256 * s * s)
-        self.dec = nn.Sequential(nn.BatchNorm2d(256), nn.LeakyReLU(0.2),
-                                 dblk(256, 128), dblk(128, 64), dblk(64, 32),
-                                 nn.ConvTranspose2d(32, 1, 4, 2, 1), nn.Tanh())
-    def forward(self, x):
-        z = self.enc(x)
-        return self.dec(self.fc(z).view(-1, 256, self.s, self.s)), z
+import os
+import sys
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from PIL import Image, ImageDraw
 
-ckpt_path = os.path.join(MODELS_DIR, "convae_anomaly_model.pth")
-ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-ae = ConvAE(latent=ckpt["latent_dim"], img=ckpt["img_size"])
-ae.load_state_dict(ckpt["ae_state_dict"])
-ae.eval()
+MODELS_DIR = r"D:\COLLAGE\Hybrid-Medical-dignostics\models"
+FIG_DIR = r"D:\COLLAGE\Hybrid-Medical-dignostics\research\figures"
+os.makedirs(FIG_DIR, exist_ok=True)
 
-t_thr = float(ckpt["t_thr"])
-scale = float(ckpt["scale"])
+sys.path.insert(0, r"D:\COLLAGE\Hybrid-Medical-dignostics\src")
+from pipeline import preprocess_radiograph, run_convae_inference
+from loader import load_model_and_artifacts
+
+loaded_model, artifacts = load_model_and_artifacts(MODELS_DIR)
 
 norm_img_path = os.path.join(MODELS_DIR, "sample_xray_normal.png")
 pneum_img_path = os.path.join(MODELS_DIR, "sample_xray_pneumonia.png")
 
-norm_img = Image.open(norm_img_path).convert("L").resize((128, 128))
-pneum_img = Image.open(pneum_img_path).convert("L").resize((128, 128))
-
-def run_mrf(r, t, sc, beta=1.0, iters=8):
-    s = ((r - t) / sc).astype(np.float32)
-    y = (s > 0).astype(np.float32)
-    ii, jj = np.indices(r.shape)
-    masks = [((ii + jj) % 2 == k) for k in (0, 1)]
-    for _ in range(iters):
-        for m in masks:
-            p = np.pad(y, ((1, 1), (1, 1)))
-            n1 = p[:-2, 1:-1] + p[2:, 1:-1] + p[1:-1, :-2] + p[1:-1, 2:]
-            E1 = -s + beta * (4 - n1)
-            E0 =  s + beta * n1
-            y = np.where(m, (E1 < E0).astype(np.float32), y)
-    return y.astype(np.uint8)
-
-fig, axes = plt.subplots(2, 4, figsize=(11, 5.5), dpi=300)
 samples = [
-    ("Control / Healthy CXR", norm_img),
-    ("Pathological CXR (Pneumonia)", pneum_img)
+    ("Normative Baseline (Control CXR)", norm_img_path),
+    ("Pathological Anomaly (Focal Pneumonia)", pneum_img_path)
 ]
 
-for row, (label, img) in enumerate(samples):
-    arr = np.array(img, dtype=np.float32)
-    tensor_in = torch.from_numpy(arr).div(127.5).sub(1.0).unsqueeze(0).unsqueeze(0)
+fig, axes = plt.subplots(2, 5, figsize=(15, 6.2), dpi=300)
+
+for row, (label, p) in enumerate(samples):
+    raw_img = Image.open(p)
+    input_tensor, ww_img, norm_source = preprocess_radiograph(
+        raw_img=raw_img,
+        window_level=0.5,
+        window_width=1.0,
+        invert_polarity=False,
+        target_size=(artifacts["img_size"], artifacts["img_size"])
+    )
+    recon_data = run_convae_inference(
+        model=loaded_model,
+        input_tensor=input_tensor,
+        artifacts=artifacts,
+        mrf_scale_factor=1.0,
+        mrf_beta=1.0
+    )
     
-    with torch.no_grad():
-        rec, _ = ae(tensor_in)
-        r = ((tensor_in - rec)**2).squeeze().numpy()
-        rec_arr = (rec.squeeze().numpy() * 0.5 + 0.5).clip(0, 1)
+    # 1. Patient Scan
+    axes[row, 0].imshow(recon_data["orig_norm"], cmap="gray")
+    axes[row, 0].set_ylabel(label, fontsize=10, fontweight="bold", labelpad=8)
+    if row == 0:
+        axes[row, 0].set_title("1. PATIENT SCAN\nWindowed Native CXR", fontsize=9.5, fontweight="bold", pad=8)
+    else:
+        axes[row, 0].set_xlabel("Windowed Native CXR", fontsize=8.5, color="#334155", fontweight="semibold")
 
-    y_mrf = run_mrf(r, t_thr, scale, beta=1.0)
-    area_pct = float(y_mrf.mean() * 100)
+    # 2. Normative Baseline
+    axes[row, 1].imshow(recon_data["rec_norm"], cmap="gray")
+    if row == 0:
+        axes[row, 1].set_title("2. NORMATIVE BASELINE\nConvAE Reconstruction", fontsize=9.5, fontweight="bold", pad=8)
+    else:
+        axes[row, 1].set_xlabel("ConvAE Reconstruction", fontsize=8.5, color="#334155", fontweight="semibold")
 
-    # (a) Input Scan
-    axes[row, 0].imshow(np.array(img), cmap="gray")
-    axes[row, 0].set_ylabel(label, fontsize=10, fontweight="bold")
-    if row == 0: axes[row, 0].set_title("(a) Input CXR (128x128)", fontsize=9, fontweight="bold")
+    # 3. Residual Error
+    r_disp = recon_data["R_map"] / max(recon_data["R_map"].max(), 1e-6)
+    cmap = plt.get_cmap("inferno")
+    heatmap_rgb = cmap(r_disp)[:, :, :3]
+    axes[row, 2].imshow(heatmap_rgb)
+    if row == 0:
+        axes[row, 2].set_title("3. RESIDUAL SQUARED ERROR\nR(x, y) [inferno]", fontsize=9.5, fontweight="bold", pad=8)
+    else:
+        axes[row, 2].set_xlabel("R(x, y) [inferno]", fontsize=8.5, color="#334155", fontweight="semibold")
 
-    # (b) AE Recon
-    axes[row, 1].imshow(rec_arr, cmap="gray")
-    if row == 0: axes[row, 1].set_title("(b) ConvAE Normative Recon", fontsize=9, fontweight="bold")
+    # 4. MRF Potts Segment
+    mrf_mask = recon_data["mrf_mask"]
+    axes[row, 3].imshow(mrf_mask, cmap="gray")
+    area_str = f"Area: {recon_data['lesion_area_pct']:.2f}%"
+    if row == 0:
+        axes[row, 3].set_title(f"4. MRF POTTS SEGMENT\n{area_str}", fontsize=9.5, fontweight="bold", pad=8)
+    else:
+        axes[row, 3].set_xlabel(area_str, fontsize=8.5, color="#334155", fontweight="semibold")
 
-    # (c) Raw Residual Heatmap
-    im_r = axes[row, 2].imshow(r, cmap="inferno")
-    if row == 0: axes[row, 2].set_title(f"(c) Focal Residual R(x,y)", fontsize=9, fontweight="bold")
-    axes[row, 2].set_xlabel(f"Peak Error: {r.max():.3f}", fontsize=8)
-
-    # (d) MRF Mask
-    axes[row, 3].imshow(y_mrf, cmap="gray")
-    if row == 0: axes[row, 3].set_title("(d) MRF Denoised Mask", fontsize=9, fontweight="bold")
-    axes[row, 3].set_xlabel(f"Lesion Area: {area_pct:.2f}%", fontsize=8)
+    # 5. Diagnostic Lesion Map (Overlay + Cyan Bounding Boxes)
+    orig_rgb = np.repeat(recon_data["orig_norm"][..., None], 3, axis=2)
+    overlay_rgb = orig_rgb.copy()
+    overlay_opacity = 0.45
+    overlay_rgb[mrf_mask == 1, 0] = np.clip(orig_rgb[mrf_mask == 1, 0] * (1.0 - overlay_opacity) + overlay_opacity * 1.0, 0, 1)
+    overlay_rgb[mrf_mask == 1, 1] = np.clip(orig_rgb[mrf_mask == 1, 1] * (1.0 - overlay_opacity), 0, 1)
+    overlay_rgb[mrf_mask == 1, 2] = np.clip(orig_rgb[mrf_mask == 1, 2] * (1.0 - overlay_opacity), 0, 1)
+    
+    pil_ov = Image.fromarray((overlay_rgb * 255).astype(np.uint8))
+    draw = ImageDraw.Draw(pil_ov)
+    detected = recon_data["detected_lesions"]
+    for les in detected:
+        bx, by, bw, bh = les["bbox"]
+        draw.rectangle([bx, by, bx + bw, by + bh], outline="#00FFFF", width=2)
+        draw.text((bx, max(0, by - 10)), f"L{les['cluster_id']}", fill="#00FFFF")
+    
+    axes[row, 4].imshow(pil_ov)
+    bbox_str = f"{len(detected)} Lesion BBoxes (Cyan)" if len(detected) > 0 else "0 Lesion BBoxes (Normative)"
+    if row == 0:
+        axes[row, 4].set_title(f"5. DIAGNOSTIC LESION MAP\n{bbox_str}", fontsize=9.5, fontweight="bold", pad=8)
+    else:
+        axes[row, 4].set_xlabel(bbox_str, fontsize=8.5, color="#334155", fontweight="semibold")
 
 for ax in axes.ravel():
     ax.set_xticks([])
     ax.set_yticks([])
 
-plt.suptitle("Figure 4: Real Radiograph Anomaly Localization Across ConvAE and Potts MRF", fontsize=11, fontweight="bold")
+plt.suptitle("Figure 4: 5-Stage Spatial Decomposition Pipeline Across Normative vs Pathological CXRs", fontsize=12, fontweight="bold", y=0.98)
 plt.tight_layout()
-plt.savefig(os.path.join(FIG_DIR, "fig4_visual_progression.png"), dpi=300)
+plt.subplots_adjust(top=0.88, wspace=0.14, hspace=0.28)
+out_path = os.path.join(FIG_DIR, "fig4_visual_progression.png")
+plt.savefig(out_path, dpi=300)
 plt.close()
-print("Saved real medical CXR fig4_visual_progression.png")
+print("Saved real medical CXR fig4_visual_progression.png (5-stage) to", out_path)
+
 
 # ==========================================
 # FIG 5: Bayesian Evidence Probability Shift

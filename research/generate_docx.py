@@ -209,9 +209,9 @@ add_image_box("fig3_loss_convergence.png", "Figure 3: ConvAE training loss conve
 # Section 4
 add_heading_1("4. Visual Progression & Qualitative Interpretability")
 add_p(
-    "Figure 4 illustrates the 4-stage visual inspection progression comparing normal control scans against pathological scans. In Stage 1, the scan is normalized. In Stage 2, the Autoencoder attempts normal baseline reconstruction. In Stage 3, raw subtraction produces noisy residual error. In Stage 4, the MRF lattice silences false positives and extracts contiguous, solid lesion segmentations."
+    "Figure 4 illustrates the 5-stage spatial decomposition pipeline comparing normal control scans against pathological scans. In Stage 1 (Patient Scan), the radiograph undergoes DICOM window leveling and thoracic normalization. In Stage 2 (Normative Baseline), the ConvAE attempts healthy parenchyma reconstruction. In Stage 3 (Residual Squared Error), spatial subtraction isolates pixel anomalies. In Stage 4 (MRF Potts Segment), edge-preserving energy minimization eliminates noise and segments contiguous lesion boundaries. In Stage 5 (Diagnostic Lesion Map), cyan bounding boxes and calibrated heatmaps localize focal pathology coordinates for clinician decision support."
 )
-add_image_box("fig4_visual_progression.png", "Figure 4: 4-Stage visual progression across generative reconstruction and MRF denoising.")
+add_image_box("fig4_visual_progression.png", "Figure 4: Five-stage spatial decomposition pipeline across normative baseline vs pathological cases (1. Patient Scan, 2. Normative Baseline, 3. Residual Error, 4. Potts MRF Segment, 5. Diagnostic Lesion Map with Cyan Bounding Boxes).")
 
 # Section 5
 add_heading_1("5. Calibrated Clinical Uncertainty & Decision Support")
