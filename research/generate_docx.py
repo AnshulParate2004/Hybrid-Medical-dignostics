@@ -108,7 +108,7 @@ def add_image_box(filename, caption):
 
 # ----------------- BUILD DOCUMENT -----------------
 add_title("A Hybrid Generative-Probabilistic Framework for Unsupervised Medical Anomaly Detection and Calibrated Clinical Uncertainty Estimation")
-add_subtitle("IEEE Transactions on Medical Imaging (TMI) • Comprehensive Manuscript Documentation")
+add_subtitle("IEEE Conference Technical Paper & Comprehensive Methodology Documentation")
 add_authors()
 
 # Abstract
@@ -209,9 +209,9 @@ add_image_box("fig3_loss_convergence.png", "Figure 3: ConvAE training loss conve
 # Section 4
 add_heading_1("4. Visual Progression & Qualitative Interpretability")
 add_p(
-    "Figure 4 illustrates the 5-stage visual inspection progression comparing normal control scans against pathological scans. In Stage 1, the scan is normalized. In Stage 2, the Autoencoder attempts normal baseline reconstruction. In Stage 3, pixel subtraction produces focal residual error R(x,y). In Stage 4, the edge-preserving Potts MRF lattice silences false positives and extracts contiguous, solid lesion segmentations. In Stage 5, localized lesion clusters are outlined with clinical bounding boxes."
+    "Figure 4 illustrates the 4-stage visual inspection progression comparing normal control scans against pathological scans. In Stage 1, the scan is normalized. In Stage 2, the Autoencoder attempts normal baseline reconstruction. In Stage 3, raw subtraction produces noisy residual error. In Stage 4, the MRF lattice silences false positives and extracts contiguous, solid lesion segmentations."
 )
-add_image_box("fig4_visual_progression.png", "Figure 4: Five-stage visual decomposition and spatial lesion localization across representative clinical cases: (a) Input CXR, (b) Normative ConvAE reconstruction, (c) High-frequency residual energy map R(x,y), (d) Contrast-adaptive Potts MRF binary segmentation, and (e) Diagnostic lesion overlay with bounding boxes.")
+add_image_box("fig4_visual_progression.png", "Figure 4: 4-Stage visual progression across generative reconstruction and MRF denoising.")
 
 # Section 5
 add_heading_1("5. Calibrated Clinical Uncertainty & Decision Support")
