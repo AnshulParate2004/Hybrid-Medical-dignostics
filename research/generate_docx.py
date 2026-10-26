@@ -108,7 +108,7 @@ def add_image_box(filename, caption):
 
 # ----------------- BUILD DOCUMENT -----------------
 add_title("A Hybrid Generative-Probabilistic Framework for Unsupervised Medical Anomaly Detection and Calibrated Clinical Uncertainty Estimation")
-add_subtitle("IEEE Conference Technical Paper & Comprehensive Methodology Documentation")
+add_subtitle("IEEE Transactions on Medical Imaging (TMI) • Comprehensive Manuscript Documentation")
 add_authors()
 
 # Abstract

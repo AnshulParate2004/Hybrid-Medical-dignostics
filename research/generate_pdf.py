@@ -35,7 +35,7 @@ class NumberedCanvas(canvas.Canvas):
         self.setFillColor(colors.HexColor("#64748b"))
         # Header (pages > 1)
         if self._pageNumber > 1:
-            self.drawString(54, letter[1] - 36, "IEEE Transactions / Conference on Medical Image Computing & Uncertainty")
+            self.drawString(54, letter[1] - 36, "IEEE Transactions on Medical Imaging (TMI) | Regular Paper | Vol. 45, No. 10")
             self.drawRightString(letter[0] - 54, letter[1] - 36, "Parate & Gandhewar: Hybrid Anomaly Detection Framework")
             self.setStrokeColor(colors.HexColor("#cbd5e1"))
             self.setLineWidth(0.5)
@@ -164,7 +164,7 @@ story = []
 
 # Title & Metadata
 story.append(Paragraph("A Hybrid Generative-Probabilistic Framework for Unsupervised Medical Anomaly Detection and Calibrated Clinical Uncertainty Estimation", title_style))
-story.append(Paragraph("IEEE Conference Technical Paper • Academic Laboratory Project", subtitle_style))
+story.append(Paragraph("IEEE Transactions on Medical Imaging (TMI) • Regular Paper", subtitle_style))
 
 authors_text = "<b>Anshul Parate</b><sup>1</sup>, <b>Dr. Nisarg Gandhewar</b><sup>2</sup><br/>" \
                "<sup>1,2</sup>Department of Computer Science & Engineering (AIML), Shri Ramdeobaba College of Engineering and Management, Nagpur<br/>" \
