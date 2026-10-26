@@ -184,9 +184,9 @@ The primary contributions of this paper are:
 \node[box=mlpgray, text width=2.8cm, below=0.7cm of rbm] (mlp) {
     \textbf{\footnotesize Tuned Deep MLP Head}\\[2pt]
     \rule{2.6cm}{0.5pt}\\[3pt]
-    \scriptsize $1024 \to 512 \to 14$\\
-    \scriptsize Multi-Label Probabilities\\
-    \scriptsize Visual Classification Logits
+    \scriptsize $1024 \to 256 \to 128 \to 1$\\
+    \scriptsize Non-Linear Embeddings\\
+    \scriptsize Calibrated Score $S_{\text{MLP}}$
 };
 
 % Column 4: PGM Engines & Demographic Confounder
@@ -209,18 +209,18 @@ The primary contributions of this paper are:
 \node[box=demoteal, text width=2.9cm, right=1.1cm of mlp] (demo) {
     \textbf{\footnotesize Demographic Prior}\\[2pt]
     \rule{2.7cm}{0.5pt}\\[3pt]
-    \scriptsize $P(\text{Disease} \mid \text{Age, Sex, View})$\\
-    \scriptsize $147\text{k}$ Multi-Patient Prior\\
-    \scriptsize Confounder Stratification
+    \scriptsize $P(\text{Pathology} \mid \text{Age, Sex, View})$\\
+    \scriptsize $147\text{k}$ Multi-Patient Cohort\\
+    \scriptsize Clinical Risk Prior $P_{\text{Demo}}$
 };
 
 % Column 5: Multi-Modal Late Fusion & Bayesian DAG
-\node[box=fusionpurple, text width=3.4cm, right=1.2cm of eflag] (fusion) {
+\node[box=fusionpurple, text width=3.4cm, right=2.2cm of eflag] (fusion) {
     \textbf{\footnotesize Probabilistic Fusion DAG}\\[2pt]
     \rule{3.2cm}{0.5pt}\\[3pt]
     \scriptsize Causal Directed Acyclic Graph\\
     \scriptsize Exact Variable Elimination\\
-    \scriptsize $P(\text{Disease} \mid \text{Evidence})$\\[4pt]
+    \scriptsize $P(\text{Pathology} \mid \text{Evidence})$\\[4pt]
     \textbf{\scriptsize Multi-Modal Late-Fusion:}\\[2pt]
     \scriptsize $S_{\text{Hybrid}} = \alpha S_{\text{Vis}} + \beta S_{\text{MLP}} + \gamma P_{\text{Demo}}$
 };
@@ -247,10 +247,11 @@ The primary contributions of this paper are:
 \draw[arr] (residual.east) -- (mrf.west) node[midway, tag] {ICM Denoise};
 \draw[arr] (rbm.east) -- (eflag.west) node[midway, tag] {Free Energy};
 
-\draw[arr] (mrf.east) -- ++(0.45,0) |- ([yshift=0.6cm]fusion.west) node[near end, above, font=\tiny\bfseries, text=teal!80!black] {Lesion Mask ($a_{\text{lesion}}$)};
-\draw[arr] (eflag.east) -- (fusion.west) node[midway, tag] {Energy Flag};
-\draw[arr] (mlp.east) -- (demo.west) node[midway, tag] {Vision Logits};
-\draw[arr] (demo.east) -- ++(0.45,0) |- ([yshift=-0.6cm]fusion.west) node[near end, below, font=\tiny\bfseries, text=teal!80!black] {Demographic Prior};
+% Clean non-overlapping routing into Fusion DAG
+\draw[arr] (mrf.east) -- ++(0.75,0) |- ([yshift=0.75cm]fusion.west) node[pos=0.25, above, tag] {Lesion Mask $a_{\text{lesion}}$};
+\draw[arr] (eflag.east) -- ([yshift=0.25cm]fusion.west) node[midway, tag] {Energy Flag $E$};
+\draw[arr] (mlp.east) -- ++(0.75,0) |- ([yshift=-0.25cm]fusion.west) node[pos=0.25, above, tag] {MLP Logits $S_{\text{MLP}}$};
+\draw[arr] (demo.east) -- ++(0.75,0) |- ([yshift=-0.75cm]fusion.west) node[pos=0.25, below, tag] {Demographic Prior $P_{\text{Demo}}$};
 
 \draw[arr] (fusion.east) -- (pacs.west) node[midway, tag] {Calibrated Triage};
 
